@@ -4,7 +4,8 @@ import { Server } from 'lucide-react';
 
 export const ServerManagement: React.FC = () => {
   const { servers, serverStatusMessage } = useBotDashboard();
-  const installedServers = servers.filter((server) => server.botInstalled);
+  const installedServers = servers.filter((server) => server.botInstalled === true);
+  const botMembershipUnchecked = servers.some((server) => server.botInstalled === null || server.botInstalled === undefined);
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-4 py-10 sm:px-6 lg:px-8">
@@ -20,7 +21,11 @@ export const ServerManagement: React.FC = () => {
         <p className="border-y border-[#35383d] py-14 text-center text-sm text-[#aeb4bb]">No manageable Discord servers were returned by the connected account.</p>
       ) : (
         <>
-          <p className="text-sm text-[#aeb4bb]">{installedServers.length} of {servers.length} manageable servers have the bot installed.</p>
+          <p className="text-sm text-[#aeb4bb]">
+            {botMembershipUnchecked
+              ? 'Bot membership checks require DISCORD_BOT_TOKEN.'
+              : `${installedServers.length} of ${servers.length} manageable servers have the bot installed.`}
+          </p>
           <div className="divide-y divide-[#35383d] border-y border-[#35383d]">
             {servers.map((server) => {
               const memberCountLabel = typeof server.memberCount === 'number'
@@ -33,8 +38,8 @@ export const ServerManagement: React.FC = () => {
                     <p className="truncate text-sm font-medium text-white">{server.name}</p>
                     <p className="mt-1 text-xs text-[#858c93]">{server.owner ? 'Owner' : 'Manage Server'} <span className="mx-1">·</span> {memberCountLabel}</p>
                   </div>
-                  <span className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${server.botInstalled ? 'bg-[#1d302a] text-[#9cddc7]' : 'bg-[#292d31] text-[#aeb4bb]'}`}>
-                    {server.botInstalled ? 'Bot installed' : 'Not installed'}
+                  <span className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${server.botInstalled === true ? 'bg-[#1d302a] text-[#9cddc7]' : 'bg-[#292d31] text-[#aeb4bb]'}`}>
+                    {server.botInstalled === null || server.botInstalled === undefined ? 'Not checked' : server.botInstalled ? 'Bot installed' : 'Not installed'}
                   </span>
                 </div>
               );

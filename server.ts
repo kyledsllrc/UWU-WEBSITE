@@ -1,5 +1,5 @@
 import express, { NextFunction, Request, Response } from 'express';
-import { randomBytes } from 'crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import 'dotenv/config';
@@ -25,16 +25,15 @@ interface DiscordGuildSession {
 
 interface DiscordSession {
   expiresAt: number;
+  accessToken: string;
   user: {
     id: string;
     username: string;
     globalName: string;
     avatar: string;
   };
-  guilds: DiscordGuildSession[];
 }
 
-const discordSessions = new Map<string, DiscordSession>();
 const sessionCookie = 'uwu_dashboard_session';
 const stateCookie = 'uwu_discord_oauth_state';
 const dashboardAdminIds = new Set(
@@ -56,14 +55,43 @@ function setCookie(response: Response, request: Request, name: string, value: st
 }
 
 function getDiscordSession(request: Request): DiscordSession | undefined {
-  const id = cookieValue(request, sessionCookie);
-  if (!id) return undefined;
-  const session = discordSessions.get(id);
+  const encoded = cookieValue(request, sessionCookie);
+  if (!encoded) return undefined;
+  const session = decodeDiscordSession(encoded);
   if (session && session.expiresAt <= Date.now()) {
-    discordSessions.delete(id);
     return undefined;
   }
   return session;
+}
+
+function getSessionEncryptionKey(): Buffer {
+  const secret = process.env.DASHBOARD_SESSION_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!secret) throw new Error('DASHBOARD_SESSION_SECRET or NEXTAUTH_SECRET is required.');
+  return createHash('sha256').update(secret).digest();
+}
+
+function encodeDiscordSession(session: DiscordSession): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', getSessionEncryptionKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(JSON.stringify(session), 'utf8'), cipher.final()]);
+  return [iv, cipher.getAuthTag(), encrypted].map((part) => part.toString('base64url')).join('.');
+}
+
+function decodeDiscordSession(encoded: string): DiscordSession | undefined {
+  try {
+    const [ivText, tagText, encryptedText] = encoded.split('.');
+    if (!ivText || !tagText || !encryptedText) return undefined;
+    const decipher = createDecipheriv('aes-256-gcm', getSessionEncryptionKey(), Buffer.from(ivText, 'base64url'));
+    decipher.setAuthTag(Buffer.from(tagText, 'base64url'));
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(encryptedText, 'base64url')),
+      decipher.final(),
+    ]).toString('utf8');
+    const session = JSON.parse(decrypted) as DiscordSession;
+    return session.user?.id && session.accessToken && Number.isFinite(session.expiresAt) ? session : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function isDashboardAdmin(session: DiscordSession): boolean {
@@ -123,13 +151,18 @@ app.get('/api/auth/session', (request: Request, response: Response) => {
     authenticated: true,
     authorized: isDashboardAdmin(session),
     user: session.user,
-    guilds: session.guilds.filter(hasGuildAdminAccess),
   });
 });
 
 app.get('/api/auth/discord', (request: Request, response: Response) => {
   const clientId = process.env.DISCORD_CLIENT_ID;
-  if (!clientId) return response.status(503).send('Discord OAuth is not configured.');
+  const clientSecret = process.env.DISCORD_CLIENT_SECRET;
+  try {
+    getSessionEncryptionKey();
+  } catch {
+    return response.status(503).send('Discord session encryption is not configured.');
+  }
+  if (!clientId || !clientSecret) return response.status(503).send('Discord OAuth is not configured.');
 
   const state = randomBytes(24).toString('hex');
   setCookie(response, request, stateCookie, state, 600);
@@ -181,18 +214,15 @@ app.get('/api/auth/discord/callback', async (request: Request, response: Respons
     ]);
     if (!userResponse.ok || !guildResponse.ok) throw new Error('Discord profile fetch failed.');
     const profile = await userResponse.json() as { id: string; username: string; global_name?: string | null; avatar?: string | null };
-    const guilds = await guildResponse.json() as DiscordGuildSession[];
     const avatar = profile.avatar
       ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.${profile.avatar.startsWith('a_') ? 'gif' : 'png'}`
       : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(profile.id) >> 22n) % 6}.png`;
-    const sessionId = randomBytes(32).toString('hex');
-
-    discordSessions.set(sessionId, {
+    const session = {
       expiresAt: Date.now() + 60 * 60 * 12 * 1000,
+      accessToken: tokenData.access_token,
       user: { id: profile.id, username: profile.username, globalName: profile.global_name || profile.username, avatar },
-      guilds: guilds.filter(hasGuildAdminAccess),
-    });
-    setCookie(response, request, sessionCookie, sessionId, 60 * 60 * 12);
+    } satisfies DiscordSession;
+    setCookie(response, request, sessionCookie, encodeDiscordSession(session), 60 * 60 * 12);
     response.redirect('/');
   } catch {
     response.redirect('/?authError=discord');
@@ -200,8 +230,6 @@ app.get('/api/auth/discord/callback', async (request: Request, response: Respons
 });
 
 app.post('/api/auth/logout', (request: Request, response: Response) => {
-  const sessionId = cookieValue(request, sessionCookie);
-  if (sessionId) discordSessions.delete(sessionId);
   response.append('Set-Cookie', `${sessionCookie}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${request.secure ? '; Secure' : ''}`);
   response.json({ success: true });
 });
@@ -397,33 +425,43 @@ app.get('/api/leaderboard', async (_req: Request, res: Response) => {
 
 app.get('/api/servers', async (req: Request, res: Response) => {
   const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
-  if (!botToken) return res.status(503).json({ error: 'DISCORD_BOT_TOKEN is not configured.' });
-
   try {
     const session = getDiscordSession(req)!;
+    const guildResponse = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
+      headers: { Authorization: `Bearer ${session.accessToken}` },
+    });
+    if (!guildResponse.ok) throw new Error(`Discord guild lookup failed (${guildResponse.status}).`);
+    const guilds = (await guildResponse.json() as DiscordGuildSession[]).filter(hasGuildAdminAccess);
     const servers = [];
-    for (let index = 0; index < session.guilds.length; index += 5) {
-      const batch = session.guilds.slice(index, index + 5);
+    for (let index = 0; index < guilds.length; index += 5) {
+      const batch = guilds.slice(index, index + 5);
       const results = await Promise.all(batch.map(async (guild) => {
-        const response = await fetch(`https://discord.com/api/v10/guilds/${guild.id}?with_counts=true`, {
-          headers: { Authorization: `Bot ${botToken}` },
-        });
-        if (!response.ok && response.status !== 404) {
-          throw new Error(`Discord server lookup failed (${response.status}).`);
+        let botGuild: { name?: string; icon?: string | null; approximate_member_count?: number } | null = null;
+        let botInstalled: boolean | null = null;
+        if (botToken) {
+          const botGuildResponse = await fetch(`https://discord.com/api/v10/guilds/${guild.id}?with_counts=true`, {
+            headers: { Authorization: `Bot ${botToken}` },
+          });
+          if (!botGuildResponse.ok && botGuildResponse.status !== 404) {
+            throw new Error(`Bot server lookup failed (${botGuildResponse.status}).`);
+          }
+          botInstalled = botGuildResponse.ok;
+          if (botGuildResponse.ok) botGuild = await botGuildResponse.json();
         }
-        const botGuild = response.ok ? await response.json() as { name?: string; icon?: string | null; approximate_member_count?: number } : null;
         return {
           id: guild.id,
           name: botGuild?.name || guild.name,
-          icon: botGuild?.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${botGuild.icon}.png` : null,
+          icon: guild.icon
+            ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png`
+            : botGuild?.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${botGuild.icon}.png` : null,
           memberCount: botGuild?.approximate_member_count ?? guild.approximate_member_count ?? null,
           owner: guild.owner,
-          botInstalled: response.ok,
+          botInstalled,
         };
       }));
       servers.push(...results);
     }
-    res.json({ servers });
+    res.json({ servers, botMembershipChecked: Boolean(botToken) });
   } catch (error: unknown) {
     const errorMsg = error instanceof Error ? error.message : 'Discord API error';
     res.status(500).json({ error: errorMsg });
@@ -588,4 +626,6 @@ async function startServer() {
   });
 }
 
-startServer();
+if (!process.env.VERCEL) void startServer();
+
+export default app;
