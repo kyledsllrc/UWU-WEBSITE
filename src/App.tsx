@@ -1,36 +1,32 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { BotDashboardProvider, useBotDashboard } from './context/BotDashboardContext';
 import { Navbar } from './components/Navbar';
 import { LandingPage } from './components/LandingPage';
+import { AuthScreen } from './components/AuthScreen';
 import { UserProfile } from './components/UserProfile';
 import { ServerManagement } from './components/ServerManagement';
 import { GlobalLeaderboard } from './components/GlobalLeaderboard';
 import { FirebaseAndApiSetup } from './components/FirebaseAndApiSetup';
-import { DiscordAuthModal } from './components/DiscordAuthModal';
-import { BotInviteModal } from './components/BotInviteModal';
 import { Footer } from './components/Footer';
 import { ToastContainer } from './components/ToastContainer';
 
 function DashboardContent() {
-  const { currentTab } = useBotDashboard();
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const { currentTab, user, isAuthLoading } = useBotDashboard();
+
+  if (isAuthLoading) {
+    return <div className="flex min-h-screen items-center justify-center bg-[#171a1c] text-sm text-[#aeb4bb]">Checking Discord session...</div>;
+  }
+  if (!user) return <AuthScreen />;
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#111214] text-[#DBDEE1]">
+    <div className="min-h-screen flex flex-col bg-[#171a1c] text-[#d9e0e2]">
       {/* Discord Top Navigation */}
-      <Navbar
-        onOpenAuthModal={() => setAuthModalOpen(true)}
-        onOpenInviteModal={() => setInviteModalOpen(true)}
-      />
+      <Navbar />
 
       {/* Main Content Area */}
       <main className="flex-1">
         {currentTab === 'landing' && (
-          <LandingPage
-            onOpenAuthModal={() => setAuthModalOpen(true)}
-            onOpenInviteModal={() => setInviteModalOpen(true)}
-          />
+          <LandingPage />
         )}
         {currentTab === 'dashboard' && <UserProfile />}
         {currentTab === 'servers' && <ServerManagement />}
@@ -41,15 +37,6 @@ function DashboardContent() {
       {/* Footer */}
       <Footer />
 
-      {/* Modals & Toasts */}
-      <DiscordAuthModal
-        isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-      />
-      <BotInviteModal
-        isOpen={inviteModalOpen}
-        onClose={() => setInviteModalOpen(false)}
-      />
       <ToastContainer />
     </div>
   );

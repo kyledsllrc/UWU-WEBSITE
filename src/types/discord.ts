@@ -1,122 +1,45 @@
-export type UserStatus = 'online' | 'idle' | 'dnd' | 'offline';
-
 export interface DiscordUser {
   id: string;
   username: string;
-  discriminator: string;
   globalName: string;
   avatar: string;
-  banner?: string;
-  nitroType?: 'booster' | 'classic' | 'none';
-  status: UserStatus;
-  customStatus?: string;
 }
 
-export interface EconomyStats {
+export interface BotUserStats {
+  gamesPlayed: number;
+  gamesWon: number;
+  totalWagered: number;
+  totalWon: number;
+}
+
+export interface BotUserRecord {
+  discordUserId: string;
+  username: string;
+  displayName: string;
   wallet: number;
   bank: number;
-  bankLimit: number;
-  dailyStreak: number;
-  lastDailyClaim?: string;
-  totalGambled: number;
-  gambleWins: number;
-  gambleLosses: number;
+  streak: number;
+  prestige: number;
+  isBooster: boolean;
+  cryptoPositions: Record<string, unknown>;
+  history: Record<string, unknown>[];
+  rank: string;
+  charismaExp: number;
+  boostCount: number;
+  stats: BotUserStats;
 }
 
-export interface MarriageData {
-  isMarried: boolean;
-  partnerId?: string;
-  partnerName?: string;
-  partnerAvatar?: string;
-  partnerHandle?: string;
-  marriedAt?: string;
-  ringType?: string;
-  sharedVaultBalance: number;
-  loveAffinity: number; // 0 to 100
-}
-
-export interface LevelRank {
-  level: number;
-  currentXp: number;
-  requiredXp: number;
-  rankPosition: number;
-  tierTitle: string;
-  voiceHours: number;
-  messageCount: number;
-}
-
-export interface Transaction {
-  id: string;
-  type: 'daily' | 'gamble_win' | 'gamble_loss' | 'transfer' | 'bank_deposit' | 'bank_withdraw' | 'booster_reward';
-  amount: number;
-  description: string;
-  timestamp: string;
-}
-
-export interface GuildModules {
-  economy: {
-    enabled: boolean;
-    dailyReward: number;
-    robberyRate: number;
-    shopEnabled: boolean;
-  };
-  gambling: {
-    enabled: boolean;
-    maxBet: number;
-    houseEdge: number;
-    coinflip: boolean;
-    roulette: boolean;
-    slots: boolean;
-  };
-  social: {
-    enabled: boolean;
-    marriageFee: number;
-    customMarryRoles: boolean;
-    sharedVault: boolean;
-  };
-  moderation: {
-    enabled: boolean;
-    boosterPerks: boolean;
-    autoMod: boolean;
-    antiSpam: boolean;
-  };
-}
-
-export interface DiscordGuild {
-  id: string;
-  name: string;
-  icon: string;
-  banner?: string;
-  memberCount: number;
-  botInstalled: boolean;
-  userRole: 'Owner' | 'Administrator' | 'Moderator';
-  prefix: string;
-  logChannelId: string;
-  welcomeChannelId: string;
-  autoRoleId: string;
-  modules: GuildModules;
-}
-
-export interface LeaderboardEntry {
-  rank: number;
+export interface BotLeaderboardEntry {
   id: string;
   username: string;
-  handle: string;
-  avatar: string;
+  displayName: string;
   wallet: number;
   bank: number;
-  totalWealth: number;
-  level: number;
-  xp: number;
-  messageCount: number;
-  tierBadge: string;
+  netWorth: number;
+  rank: string;
+  prestige: number;
+  streak: number;
+  charismaExp: number;
   isBooster: boolean;
-}
-
-export interface BotCommand {
-  name: string;
-  description: string;
-  category: 'Economy' | 'Gambling' | 'Social' | 'Booster' | 'Config';
-  syntax: string;
-  exampleOutput: string;
+  boostCount: number;
 }
