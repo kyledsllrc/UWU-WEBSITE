@@ -1,0 +1,6 @@
+{
+  "name": "uwu-bot - Discord Bot Dashboard",
+  "description": "Modern Discord bot web dashboard for uwu-bot by kyledsllrc, featuring cowoncy economy, animal hunting zoo, marriage vaults, server management, Discord OAuth2, and Firebase Realtime Database integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,42 @@
+{
+  "users": {
+    "439281729104829102": {
+      "username": "kyledsllrc",
+      "wallet": 38450,
+      "bank": 245000,
+      "dailyStreak": 24,
+      "lastClaim": "2026-10-29T10:50:00Z",
+      "zoo": {
+        "captured": 102,
+        "mythic": 2,
+        "legendary": 1,
+        "epic": 5,
+        "rare": 14,
+        "uncommon": 28,
+        "common": 52
+      },
+      "marriage": {
+        "partnerId": "829104829102847192",
+        "partnerName": "Aria (Sakura)",
+        "ring": "Sakura Diamond Promise Ring (Tier V)",
+        "sharedVault": 128500,
+        "loveAffinity": 98
+      }
+    }
+  },
+  "guilds": {
+    "guild_uwu_1": {
+      "name": "Kyle's Community Lounge",
+      "prefix": "uwu ",
+      "logChannelId": "109283746501",
+      "welcomeChannelId": "109283746502",
+      "autoRoleId": "109283746503",
+      "modules": {
+        "economy": true,
+        "gambling": true,
+        "social": true,
+        "zoo": true
+      }
+    }
+  }
+}
